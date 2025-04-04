@@ -25,21 +25,16 @@ export const WebSocketProvider = ({ children }) => {
     const setupWebSocket = async () => {
       if (isAuthenticated) {
         try {
-          console.log('Đang kết nối WebSocket...');
           const connected = await websocketService.connect();
-          console.log('Kết quả kết nối WebSocket:', connected);
           setIsConnected(connected);
 
           if (connected) {
-            console.log('WebSocket đã kết nối thành công!');
             
             const onOpenUnsubscribe = websocketService.addEventListener('connected', () => {
-              console.log('WebSocket connection established');
               setIsConnected(true);
             });
 
-            const onSeatsUpdatedUnsubscribe = websocketService.addEventListener('seats_updated', (data) => {
-              console.log('Ghế đã được cập nhật cho suất chiếu:', data.showtimeId);
+            const onSeatsUpdatedUnsubscribe = websocketService.addEventListener('seats_updated', () => {
             });
 
             const onBookingExpiringUnsubscribe = websocketService.addEventListener('booking_expiring', (data) => {
@@ -67,9 +62,10 @@ export const WebSocketProvider = ({ children }) => {
             });
 
             const onNewMessageUnsubscribe = websocketService.addEventListener('new_message', (data) => {
-              console.log('Tin nhắn mới nhận được qua WebSocket:', data);
+              console.log('New message received via WebSocket context:', data);
               
               if (data.message) {
+                // Normalize the message format
                 const normalizedMessage = {
                   _id: data.message._id,
                   sender: data.message.sender,
@@ -80,30 +76,35 @@ export const WebSocketProvider = ({ children }) => {
                   isRead: data.message.isRead || false
                 };
                 
+                // Add to global message store
                 setMessages(prev => {
                   const isDuplicate = prev.some(msg => msg._id === normalizedMessage._id);
-                  if (isDuplicate) return prev;
+                  if (isDuplicate) {
+                    console.log('Message already exists in context store');
+                    return prev;
+                  }
+                  console.log('Adding new message to context store');
                   return [...prev, normalizedMessage];
                 });
                 
-                const otherUserId = normalizedMessage.userId === userId 
-                  ? normalizedMessage.adminId 
-                  : normalizedMessage.userId;
-                
-                if (normalizedMessage.sender !== (user.role === 'admin' ? 'admin' : 'user')) {
-                  setChatState(prev => ({
+                // Also update chat state (unread counts, etc.)
+                setChatState(prev => {
+                  const otherUserId = normalizedMessage.sender === 'admin' 
+                    ? normalizedMessage.userId
+                    : normalizedMessage.adminId;
+                  
+                  return {
                     ...prev,
                     unreadCounts: {
                       ...prev.unreadCounts,
                       [otherUserId]: (prev.unreadCounts[otherUserId] || 0) + 1
                     }
-                  }));
-                }
+                  };
+                });
               }
             });
             
             const onMessageReadUnsubscribe = websocketService.addEventListener('message_read', (data) => {
-              console.log('Tin nhắn đã được đọc:', data.messageId);
               
               setMessages(prev => 
                 prev.map(msg => 
@@ -152,7 +153,6 @@ export const WebSocketProvider = ({ children }) => {
   };
   
   const addMessage = useCallback((message) => {
-    console.log('Đang thêm tin nhắn vào state:', message);
     setMessages(prev => {
       const isDuplicate = prev.some(msg => msg._id === message._id);
       if (isDuplicate) return prev;
